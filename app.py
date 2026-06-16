@@ -1,10 +1,9 @@
 """
 ================================================================================
-SEC Analytical Suite - Streamlit Web Edition (Optimized Workflow)
+SEC Analytical Suite - Streamlit Web Edition
 ================================================================================
 Description:
 This web application automates the processing, calibration, and reporting of SEC data.
-It provides a streamlined, browser-based multi-page workflow for web environments.
 ================================================================================
 """
 
@@ -60,9 +59,9 @@ st.sidebar.title("SEC Analytical Suite")
 page = st.sidebar.radio(
     "Go to Workflow Step:",
     [
-        "1. SEC Analytics Hub",
+        "1. File upload",
         "2. Calibration Curve",
-        "3. MW Fractions (AUC)",
+        "3. MW Fractions",
         "4. Quick Screening Overlay",
         "5. Theory & Mathematics"
     ]
@@ -103,17 +102,17 @@ def draw_pdf_table(df, title):
     return fig
 
 # ==========================================
-# STEP 1: COMBINED SEC ANALYTICS HUB
+# STEP 1: FILE UPLOAD & ANALYTICS HUB
 # ==========================================
-if page == "1. SEC Analytics Hub":
-    st.header("Step 1: SEC Analytics Control Hub")
-    st.info("Upload your inputs together once. The system handles database fuzzy-matching, solvent matching, and distribution analytics instantly.")
+if page == "1. File upload":
+    st.header("Step 1: File upload & Analytics Hub")
+    st.info("Upload your Oil Concentration file along with your sample and solvent CSVs together once to run the math.")
 
     col1, col2 = st.columns([1, 2])
     
     with col1:
         st.subheader("Data Uploads")
-        master_db_file = st.file_uploader("1. Upload Master Database Excel", type=["xlsx"])
+        oil_conc_file = st.file_uploader("1. Upload Oil Concentration File", type=["xlsx"])
         uploaded_csvs = st.file_uploader("2. Upload ALL Sample + Solvent CSVs together", type=["csv"], accept_multiple_files=True)
         
         st.markdown("---")
@@ -124,17 +123,17 @@ if page == "1. SEC Analytics Hub":
         run_calc = st.button("▶ Process Batch & Calculate MW", type="primary")
         
         if run_calc:
-            if not master_db_file:
-                st.error("Missing Master Database Excel file.")
+            if not oil_conc_file:
+                st.error("Missing Oil Concentration file.")
             elif not uploaded_csvs:
                 st.error("Please upload your sample and solvent CSV tracks.")
             else:
                 try:
-                    # Parse Master Database
-                    all_sheets = pd.read_excel(master_db_file, sheet_name=None, header=0, skiprows=[1])
+                    # Parse Oil Concentration File
+                    all_sheets = pd.read_excel(oil_conc_file, sheet_name=None, header=0, skiprows=[1])
                     valid_sheets = [df for name, df in all_sheets.items() if not df.empty and "sample_id" in df.columns]
                     if not valid_sheets:
-                        st.error("No valid database metrics found containing 'sample_id'.")
+                        st.error("No valid metrics found containing 'sample_id' inside the Oil Concentration file.")
                     else:
                         master_df = pd.concat(valid_sheets, ignore_index=True).dropna(subset=["sample_id"])
                         
@@ -162,7 +161,7 @@ if page == "1. SEC Analytics Hub":
                                 match = master_df[master_df["sample_id"].apply(lambda x: str(x).lower().replace(" ", "") in clean_name if pd.notnull(x) else False)]
                                 
                                 if match.empty:
-                                    st.warning(f"Skipping file {s_key}: Not found in Master Database.")
+                                    st.warning(f"Skipping file {s_key}: Not found in Oil Concentration file.")
                                     continue
                                     
                                 bio_mg = match.iloc[0]["oil_mass_mg"]
@@ -352,10 +351,10 @@ elif page == "2. Calibration Curve":
         st.pyplot(fig)
 
 # ==========================================
-# STEP 3: MW FRACTIONS (AUC)
+# STEP 3: MW FRACTIONS
 # ==========================================
-elif page == "3. MW Fractions (AUC)":
-    st.header("Step 3: Integration of Sliced Fractions (AUC)")
+elif page == "3. MW Fractions":
+    st.header("Step 3: Integration of Sliced Fractions")
     
     if not st.session_state["all_curves"]:
         st.warning("Please compute operational run profiles under Step 1 first.")
@@ -442,7 +441,7 @@ elif page == "5. Theory & Mathematics":
     
     st.markdown("""
     ### 1. Mass Correlation Indexing Architecture
-    The engine pairs uploaded file names (e.g., `PILOT_7_2.csv`) directly with rows in the Master Database, automatically extracting `oil_mass_mg` and `2meth_thf_mass_mg` metrics to establish proper dilution equations.
+    The engine pairs uploaded file names (e.g., `PILOT_7_2.csv`) directly with rows in the Oil Concentration file, automatically extracting `oil_mass_mg` and `2meth_thf_mass_mg` metrics to establish proper dilution equations.
     
     ### 2. Standard Regression Fit Polynomial
     Peak positions are evaluated using maximum array indicators ($np.nanargmax$). Logarithmic coordinates track calibration targets through standard line fitting mechanics:
