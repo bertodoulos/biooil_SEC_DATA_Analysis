@@ -59,7 +59,7 @@ st.sidebar.title("SEC Analytical Suite")
 page = st.sidebar.radio(
     "Go to Workflow Step:",
     [
-        "1. File upload",
+        "1. MW Distribution",
         "2. Calibration Curve",
         "3. MW Fractions",
         "4. Quick Screening Overlay",
@@ -105,7 +105,7 @@ def draw_pdf_table(df, title):
 # STEP 1: FILE UPLOAD & ANALYTICS
 # ==========================================
 if page == "1. File upload":
-    st.header("Step 1: File upload & Analytics")
+    st.header("Step 1: File upload & MW distribution")
     st.info("Upload your Oil Concentration file along with your sample and solvent CSVs together once to run the math.")
 
     col1, col2 = st.columns([1, 2])
