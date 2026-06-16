@@ -137,17 +137,23 @@ if page == "1. File upload":
                     else:
                         master_df = pd.concat(valid_sheets, ignore_index=True).dropna(subset=["sample_id"])
                         
-                        # Deduplicate file pool map by filename to prevent duplicates
-                        file_map = {}
+                        # Separate files into dedicated Sample vs Solvent pools immediately using naming markers
+                        sample_files = {}
+                        solvent_files = {}
+                        
+                        solvent_keywords = ["solvent", "blank", "thf", "methf", "me-thf"]
+                        
                         for f in uploaded_csvs:
-                            file_map[f.name] = f
+                            fname_lower = f.name.lower()
+                            if any(kw in fname_lower for kw in solvent_keywords):
+                                solvent_files[f.name] = f
+                            else:
+                                sample_files[f.name] = f
                         
-                        # Identify solvent files automatically via naming conventions
-                        sol_lookup = [f for f in file_map.keys() if "solvent" in f.lower() or "blank" in f.lower() or "thf" in f.lower()]
-                        sol_file_key = sol_lookup[0] if sol_lookup else None
-                        
-                        if not sol_file_key:
-                            st.error("Could not find a solvent blank file in the uploaded pool. Ensure the filename contains 'solvent', 'blank', or 'thf'.")
+                        if not solvent_files:
+                            st.error("Could not isolate any solvent baseline tracks. Ensure solvent files contain 'solvent', 'blank', 'thf', or 'methf' in their names.")
+                        elif not sample_files:
+                            st.error("No valid sample files detected in the uploaded pool.")
                         else:
                             st.session_state["master_results"] = []
                             st.session_state["master_all_curves"] = {}
@@ -156,21 +162,17 @@ if page == "1. File upload":
                             mult = st.session_state["calib_multiplier"]
                             exp = st.session_state["calib_exponent"]
                             
-                            # Scan only files that are NOT solvents
-                            sample_keys = [k for k in file_map.keys() if k != sol_file_key]
-                            
-                            # Keep track of unique short names processed to stop name duplication collision
                             seen_short_names = set()
                             
-                            for s_key in sample_keys:
-                                clean_name = s_key.lower().replace(" ", "")
+                            for s_name, s_file in sample_files.items():
+                                clean_name = s_name.lower().replace(" ", "")
                                 match = master_df[master_df["sample_id"].apply(lambda x: str(x).lower().replace(" ", "") in clean_name if pd.notnull(x) else False)]
                                 
                                 if match.empty:
-                                    st.warning(f"Skipping file {s_key}: Not found in Oil Concentration file.")
+                                    st.warning(f"Skipping file {s_name}: Not found in Oil Concentration file.")
                                     continue
                                     
-                                sam_short_id = s_key.split('.')[0]
+                                sam_short_id = s_name.split('.')[0]
                                 if sam_short_id in seen_short_names:
                                     continue
                                 seen_short_names.add(sam_short_id)
@@ -178,8 +180,21 @@ if page == "1. File upload":
                                 bio_mg = match.iloc[0]["oil_mass_mg"]
                                 sol_mg = match.iloc[0]["2meth_thf_mass_mg"]
                                 
-                                df_sam = parse_csv_file(file_map[s_key])
-                                df_sol = parse_csv_file(file_map[sol_file_key])
+                                # Dynamic Solvent Matching Strategy: Locate specific blank, or fall back to first available
+                                best_sol_key = None
+                                sam_root = sam_short_id.lower().replace(" ", "")
+                                
+                                # Look for a solvent file that shares part of the sample's name
+                                for sol_k in solvent_files.keys():
+                                    if sam_root in sol_k.lower().replace(" ", ""):
+                                        best_sol_key = sol_k
+                                        break
+                                
+                                if not best_sol_key:
+                                    best_sol_key = list(solvent_files.keys())[0]
+                                
+                                df_sam = parse_csv_file(s_file)
+                                df_sol = parse_csv_file(solvent_files[best_sol_key])
                                 
                                 if df_sam is not None and df_sol is not None:
                                     t_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values
