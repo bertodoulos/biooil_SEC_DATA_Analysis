@@ -59,7 +59,7 @@ st.sidebar.title("SEC Analytical Suite")
 page = st.sidebar.radio(
     "Go to Workflow Step:",
     [
-        "1. MW Distribution",
+        "1. File upload",
         "2. Calibration Curve",
         "3. MW Fractions",
         "4. Quick Screening Overlay",
@@ -224,7 +224,7 @@ if page == "1. File upload":
             st.write("Select records to plot or integrate into reporting arrays:")
             selected_samples = []
             
-            # FIXED: Guaranteed unique key generation using loop index tracking
+            # Guaranteed unique key generation using loop index tracking
             for idx, res in enumerate(st.session_state["master_results"]):
                 if st.checkbox(res['Sample'], value=True, key=f"cb_main_{res['Sample']}_{idx}"):
                     selected_samples.append(res['Sample'])
@@ -421,7 +421,6 @@ elif page == "4. Quick Screening Overlay":
             st.subheader("Filter Matrix")
             overlay_selected = []
             
-            # FIXED: Guaranteed unique key generation using loop index tracking
             for idx, res in enumerate(st.session_state["master_results"]):
                 if st.checkbox(res['Sample'], value=True, key=f"cb_over_{res['Sample']}_{idx}"):
                     overlay_selected.append(res['Sample'])
