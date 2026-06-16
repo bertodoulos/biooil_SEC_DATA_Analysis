@@ -102,10 +102,10 @@ def draw_pdf_table(df, title):
     return fig
 
 # ==========================================
-# STEP 1: FILE UPLOAD & ANALYTICS HUB
+# STEP 1: FILE UPLOAD & ANALYTICS
 # ==========================================
 if page == "1. File upload":
-    st.header("Step 1: File upload & Analytics Hub")
+    st.header("Step 1: File upload & Analytics")
     st.info("Upload your Oil Concentration file along with your sample and solvent CSVs together once to run the math.")
 
     col1, col2 = st.columns([1, 2])
