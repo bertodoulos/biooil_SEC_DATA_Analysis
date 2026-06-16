@@ -137,7 +137,10 @@ if page == "1. File upload":
                     else:
                         master_df = pd.concat(valid_sheets, ignore_index=True).dropna(subset=["sample_id"])
                         
-                        file_map = {f.name: f for f in uploaded_csvs}
+                        # Deduplicate file pool map by filename to prevent duplicates
+                        file_map = {}
+                        for f in uploaded_csvs:
+                            file_map[f.name] = f
                         
                         # Identify solvent files automatically via naming conventions
                         sol_lookup = [f for f in file_map.keys() if "solvent" in f.lower() or "blank" in f.lower() or "thf" in f.lower()]
@@ -156,6 +159,9 @@ if page == "1. File upload":
                             # Scan only files that are NOT solvents
                             sample_keys = [k for k in file_map.keys() if k != sol_file_key]
                             
+                            # Keep track of unique short names processed to stop name duplication collision
+                            seen_short_names = set()
+                            
                             for s_key in sample_keys:
                                 clean_name = s_key.lower().replace(" ", "")
                                 match = master_df[master_df["sample_id"].apply(lambda x: str(x).lower().replace(" ", "") in clean_name if pd.notnull(x) else False)]
@@ -163,6 +169,11 @@ if page == "1. File upload":
                                 if match.empty:
                                     st.warning(f"Skipping file {s_key}: Not found in Oil Concentration file.")
                                     continue
+                                    
+                                sam_short_id = s_key.split('.')[0]
+                                if sam_short_id in seen_short_names:
+                                    continue
+                                seen_short_names.add(sam_short_id)
                                     
                                 bio_mg = match.iloc[0]["oil_mass_mg"]
                                 sol_mg = match.iloc[0]["2meth_thf_mass_mg"]
@@ -197,7 +208,6 @@ if page == "1. File upload":
                                     else:
                                         Mn, Mw, PDI = 0, 0, 0
                                         
-                                    sam_short_id = s_key.split('.')[0]
                                     st.session_state["master_results"].append({'Sample': sam_short_id, 'Mn': round(Mn), 'Mw': round(Mw), 'PDI': round(PDI, 2)})
                                     st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
                                     st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
@@ -213,8 +223,10 @@ if page == "1. File upload":
         else:
             st.write("Select records to plot or integrate into reporting arrays:")
             selected_samples = []
-            for res in st.session_state["master_results"]:
-                if st.checkbox(res['Sample'], value=True, key=f"cb_main_{res['Sample']}"):
+            
+            # FIXED: Guaranteed unique key generation using loop index tracking
+            for idx, res in enumerate(st.session_state["master_results"]):
+                if st.checkbox(res['Sample'], value=True, key=f"cb_main_{res['Sample']}_{idx}"):
                     selected_samples.append(res['Sample'])
             
             # Apply Filter Arrays
@@ -408,8 +420,10 @@ elif page == "4. Quick Screening Overlay":
         with col1:
             st.subheader("Filter Matrix")
             overlay_selected = []
-            for res in st.session_state["master_results"]:
-                if st.checkbox(res['Sample'], value=True, key=f"cb_over_{res['Sample']}"):
+            
+            # FIXED: Guaranteed unique key generation using loop index tracking
+            for idx, res in enumerate(st.session_state["master_results"]):
+                if st.checkbox(res['Sample'], value=True, key=f"cb_over_{res['Sample']}_{idx}"):
                     overlay_selected.append(res['Sample'])
                     
         with col2:
