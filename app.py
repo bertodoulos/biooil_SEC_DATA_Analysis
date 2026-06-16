@@ -275,7 +275,7 @@ elif page == "2. Calibration Curve":
         st.pyplot(fig)
 
 # ==========================================
-# STEP 3: MW DISTRIBUTION HUB
+# STEP 3: MW DISTRIBUTION
 # ==========================================
 elif page == "3. MW Distribution Hub":
     st.header("Step 3: Baseline Integration & Weight Calculations")
@@ -399,7 +399,7 @@ elif page == "3. MW Distribution Hub":
                     st.download_button("📄 Download Document PDF Report", data=pdf_buffer, file_name="SEC_Comprehensive_Report.pdf", mime="application/pdf")
 
 # ==========================================
-# STEP 4: MW FRACTIONS (AUC)
+# STEP 4: MW FRACTIONS
 # ==========================================
 elif page == "4. MW Fractions (AUC)":
     st.header("Step 4: Integration of Sliced Fractions (AUC)")
