@@ -4,7 +4,7 @@ SEC Analytical Suite - Streamlit Web Edition
 ================================================================================
 Description:
 This web application automates the processing, calibration, and reporting of SEC data.
-It replaces the Tkinter desktop GUI with a modern, browser-based multi-page workflow.
+It provides a modern, browser-based multi-page workflow for web environments.
 ================================================================================
 """
 
@@ -19,6 +19,7 @@ import json
 import io
 import warnings
 
+# Suppress pandas warnings for cleaner background execution
 warnings.filterwarnings('ignore')
 
 # Set page configuration to wide mode to fit laptop screens beautifully
@@ -45,8 +46,17 @@ if "master_all_curves" not in st.session_state:
 if "master_raw_curves" not in st.session_state:
     st.session_state["master_raw_curves"] = []
 
+if "results_df" not in st.session_state:
+    st.session_state["results_df"] = None
+if "all_curves" not in st.session_state:
+    st.session_state["all_curves"] = {}
+if "raw_curves" not in st.session_state:
+    st.session_state["raw_curves"] = []
+if "fractions_df" not in st.session_state:
+    st.session_state["fractions_df"] = None
+
 # ==========================================
-# APP NAVIGATION sidebar
+# APP NAVIGATION
 # ==========================================
 st.sidebar.title("SEC Analytical Suite")
 page = st.sidebar.radio(
@@ -62,14 +72,13 @@ page = st.sidebar.radio(
 )
 
 # ==========================================
-# HELPER: SEC CORE CALCULATION ENGINE
+# CORE UTILITY FUNCTIONS
 # ==========================================
 def parse_csv_file(uploaded_file):
     """Robust text file loader handling UTF-8, UTF-16, commas, and tabs safely."""
     try:
-        # Read file bytes into a buffer so we can attempt multiple encodings
         file_bytes = uploaded_file.read()
-        uploaded_file.seek(0) # Reset buffer pointer
+        uploaded_file.seek(0)  # Reset buffer pointer
         try:
             df = pd.read_csv(io.BytesIO(file_bytes), header=None, sep=None, engine='python', on_bad_lines='skip')
         except UnicodeDecodeError:
@@ -144,8 +153,6 @@ if page == "1. Run List Setup":
                     bio_mg = match.iloc[0]["oil_mass_mg"]
                     sol_mg = match.iloc[0]["2meth_thf_mass_mg"]
                     
-                    # Store absolute server paths or simulate file memory. 
-                    # Note: Since Streamlit runs in a browser, we store local file names or placeholders.
                     batch_data.append({
                         'sample_filename': s_file.name,
                         'solvent_filename': f"SOLVENT_FOR_{s_file.name}",
@@ -155,14 +162,16 @@ if page == "1. Run List Setup":
                 
                 if batch_data:
                     generated_df = pd.DataFrame(batch_data)
+                    st.session_state["batch_df"] = generated_df
                     st.success(f"Run list built successfully! Compiled {len(batch_data)} tracks.")
                     st.dataframe(generated_df)
                     
-                    # Convert dataframe to Excel bytes for effortless downloading
                     towrite = io.BytesIO()
                     generated_df.to_excel(towrite, index=False, engine='openpyxl')
                     towrite.seek(0)
                     st.download_button("Download Compiled SEC_Run_List.xlsx", data=towrite, file_name="SEC_Run_List.xlsx", mime="application/vnd.ms-excel")
+        except Exception as e:
+            st.error(f"Error compiling batch: {e}")
 
 # ==========================================
 # STEP 2: CALIBRATION CURVE
@@ -174,7 +183,6 @@ elif page == "2. Calibration Curve":
     
     with col1:
         st.subheader("Calibration Targets")
-        # Let users modify the variables manually in input fields
         mult_input = st.number_input("Multiplier (a)", value=st.session_state["calib_multiplier"], format="%.5e")
         exp_input = st.number_input("Exponent (b)", value=st.session_state["calib_exponent"], format="%.5f")
         st.session_state["calib_multiplier"] = mult_input
@@ -183,7 +191,6 @@ elif page == "2. Calibration Curve":
         st.markdown("---")
         st.subheader("Manage Saved States")
         
-        # Save current settings to a JSON byte stream
         calib_dict = {
             "multiplier": st.session_state["calib_multiplier"],
             "exponent": st.session_state["calib_exponent"],
@@ -204,7 +211,7 @@ elif page == "2. Calibration Curve":
                 st.session_state["calib_exponent"] = data["exponent"]
                 st.session_state["current_std_data"] = data.get("standards_table", [])
                 st.session_state["loaded_calib_name"] = imported_json.name
-                st.success("Calibration data fetched successfully! Refresh page.")
+                st.success("Calibration data loaded successfully!")
             except Exception as e:
                 st.error(f"Malformed config: {e}")
 
@@ -214,7 +221,6 @@ elif page == "2. Calibration Curve":
         
         if std_uploads:
             calculated_stds = []
-            # Prompt for standard inputs inside a Streamlit form
             with st.form("std_form"):
                 st.write("Provide Molecular weights for uploaded standard files:")
                 inputs = {}
@@ -240,7 +246,7 @@ elif page == "2. Calibration Curve":
                         st.session_state["calib_exponent"] = slope
                         st.session_state["current_std_data"] = calculated_stds
                         st.session_state["loaded_calib_name"] = "Fresh Matrix Calculation"
-                        st.success("Recalculation complete!")
+                        st.success("Recalculation complete! Please refresh or click away to display changes.")
                     else:
                         st.error("Matrix generation requires at least 2 valid standards.")
 
@@ -285,14 +291,12 @@ elif page == "3. MW Distribution Hub":
             t_end = st.number_input("Integration End Time (min)", value=35.0)
             
             st.write("### Feed Sample and Solvent CSV files:")
-            st.info("Since web apps cannot read paths from your hard drive directly, please upload the required CSV metrics below.")
+            st.info("Upload your target analytical runs alongside your solvent blanks.")
             
             uploaded_csvs = st.file_uploader("Upload all Sample + Solvent Blank CSV files", type=["csv"], accept_multiple_files=True)
-            
             run_calc = st.button("▶ Run Distribution Calculations", type="primary")
             
             if run_calc and uploaded_csvs:
-                # Map inputs by file name
                 file_map = {f.name: f for f in uploaded_csvs}
                 
                 st.session_state["master_results"] = []
@@ -304,48 +308,50 @@ elif page == "3. MW Distribution Hub":
                 
                 for _, row in st.session_state["batch_df"].iterrows():
                     s_name_raw = os.path.basename(str(row['sample_filename']))
-                    sol_name_raw = os.path.basename(str(row['solvent_filename']))
-                    
-                    # Strip extensions to allow fuzzy mapping
                     s_lookup = s_name_raw if s_name_raw in file_map else s_name_raw.split('.')[0] + ".csv"
                     
-                    # For demo/web limits: if explicit solvent file isn't found, find the closest matching upload
-                    sol_lookup = [f for f in file_map.keys() if "methf" in f.lower() or "solvent" in f.lower()]
+                    # Target explicit solvent file or find the first one available in the uploaded pool
+                    sol_lookup = [f for f in file_map.keys() if "solvent" in f.lower() or "blank" in f.lower() or "thf" in f.lower()]
                     sol_file_key = sol_lookup[0] if sol_lookup else None
                     
                     if s_lookup in file_map and sol_file_key:
                         df_sam = parse_csv_file(file_map[s_lookup])
                         df_sol = parse_csv_file(file_map[sol_file_key])
                         
-                        t_sam, sig_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values, pd.to_numeric(df_sam.iloc[:,1], errors='coerce').values
-                        t_sol, sig_sol = pd.to_numeric(df_sol.iloc[:,0], errors='coerce').values, pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
-                        
-                        bio_mg, sol_mg = float(row['biooil_mg']), float(row['solvent_mg'])
-                        
-                        # Process Math
-                        sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
-                        norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
-                        
-                        idx_start, idx_end = np.argmin(np.abs(t_sam - t_start)), np.argmin(np.abs(t_sam - t_end))
-                        m = (norm_sig[idx_end] - norm_sig[idx_start]) / (t_sam[idx_end] - t_sam[idx_start])
-                        corr_sig = norm_sig - (m * t_sam + norm_sig[idx_start] - m * t_sam[idx_start])
-                        
-                        mask = (t_sam >= t_start) & (t_sam <= t_end)
-                        t_peak, W_i = t_sam[mask], corr_sig[mask]
-                        W_i[W_i < 0] = 0
-                        MW_i = mult * (t_peak ** exp)
-                        
-                        if np.sum(W_i) > 0:
-                            Mn = np.sum(W_i) / np.sum(W_i / MW_i)
-                            Mw = np.sum(W_i * MW_i) / np.sum(W_i)
-                            PDI = Mw / Mn
-                        else:
-                            Mn, Mw, PDI = 0, 0, 0
+                        if df_sam is not None and df_sol is not None:
+                            t_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values
+                            sig_sam = pd.to_numeric(df_sam.iloc[:,1], errors='coerce').values
+                            t_sol = pd.to_numeric(df_sol.iloc[:,0], errors='coerce').values
+                            sig_sol = pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
                             
-                        sam_short_id = s_lookup.split('.')[0]
-                        st.session_state["master_results"].append({'Sample': sam_short_id, 'Mn': round(Mn), 'Mw': round(Mw), 'PDI': round(PDI, 2)})
-                        st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
-                        st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
+                            bio_mg = float(row['biooil_mg'])
+                            sol_mg = float(row['solvent_mg'])
+                            
+                            # Base Engine Calculations
+                            sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
+                            norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
+                            
+                            idx_start = np.argmin(np.abs(t_sam - t_start))
+                            idx_end = np.argmin(np.abs(t_sam - t_end))
+                            m = (norm_sig[idx_end] - norm_sig[idx_start]) / (t_sam[idx_end] - t_sam[idx_start])
+                            corr_sig = norm_sig - (m * t_sam + norm_sig[idx_start] - m * t_sam[idx_start])
+                            
+                            mask = (t_sam >= t_start) & (t_sam <= t_end)
+                            t_peak, W_i = t_sam[mask], corr_sig[mask]
+                            W_i[W_i < 0] = 0
+                            MW_i = mult * (t_peak ** exp)
+                            
+                            if np.sum(W_i) > 0:
+                                Mn = np.sum(W_i) / np.sum(W_i / MW_i)
+                                Mw = np.sum(W_i * MW_i) / np.sum(W_i)
+                                PDI = Mw / Mn
+                            else:
+                                Mn, Mw, PDI = 0, 0, 0
+                                
+                            sam_short_id = s_lookup.split('.')[0]
+                            st.session_state["master_results"].append({'Sample': sam_short_id, 'Mn': round(Mn), 'Mw': round(Mw), 'PDI': round(PDI, 2)})
+                            st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
+                            st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
                 
                 st.success("Batch trace processing complete!")
 
@@ -354,19 +360,18 @@ elif page == "3. MW Distribution Hub":
             if not st.session_state["master_results"]:
                 st.info("Awaiting execution metrics. Provide required data files and execute.")
             else:
-                # Dynamic filter checkboxes
                 st.write("Select records to plot or integrate into reporting arrays:")
                 selected_samples = []
                 for res in st.session_state["master_results"]:
                     if st.checkbox(res['Sample'], value=True, key=f"cb_main_{res['Sample']}"):
                         selected_samples.append(res['Sample'])
                 
-                # Apply filter variables to operational dataframes
+                # Assign active filters
                 st.session_state["results_df"] = pd.DataFrame([r for r in st.session_state["master_results"] if r['Sample'] in selected_samples])
                 st.session_state["all_curves"] = {k: v for k, v in st.session_state["master_all_curves"].items() if k in selected_samples}
                 st.session_state["raw_curves"] = [c for c in st.session_state["master_raw_curves"] if c[0] in selected_samples]
                 
-                # Render Distribution Curve
+                # Distribution Plotting
                 fig, ax = plt.subplots(figsize=(6, 4))
                 for name, data in st.session_state["all_curves"].items():
                     ax.plot(data['MW'], data['W'], label=name)
@@ -383,14 +388,11 @@ elif page == "3. MW Distribution Hub":
                 st.write("#### Quantified Metrics Summary")
                 st.dataframe(st.session_state["results_df"])
                 
-                # Report PDF compiled compilation download trigger
                 if not st.session_state["results_df"].empty:
                     pdf_buffer = io.BytesIO()
                     with PdfPages(pdf_buffer) as pdf:
-                        # P1: Run Table
                         f_run = draw_pdf_table(st.session_state["results_df"], "SEC Target Averages Summary")
                         pdf.savefig(f_run); plt.close(f_run)
-                        # P2: Curve Chart
                         fig.tight_layout()
                         pdf.savefig(fig)
                     pdf_buffer.seek(0)
@@ -422,7 +424,6 @@ elif page == "4. MW Fractions (AUC)":
         st.subheader("Relative Abundance Grid Metric (%)")
         st.dataframe(st.session_state["fractions_df"])
         
-        # Plot visual grouped bars
         fig, ax = plt.subplots(figsize=(10, 5))
         colors = ['#4472c4', '#ffc000', '#00b050', '#ed7d31', '#5b9bd5']
         labels = [r[0] for r in mw_ranges]
@@ -474,7 +475,6 @@ elif page == "5. Quick Screening Overlay":
             if overlay_selected: ax.legend(frameon=False)
             st.pyplot(fig)
             
-            # Independent standalone overlay PDF export tool trigger
             if overlay_selected:
                 pdf_over_buf = io.BytesIO()
                 fig.savefig(pdf_over_buf, format='pdf')
@@ -496,11 +496,11 @@ elif page == "6. Theory & Mathematics":
     $$\log_{10}(MW) = m \cdot \log_{10}(t_{peak}) + b$$
     
     Which converts back to exponential format profiles:
-    $$MW = a \cdot t^b \quad \\text{where } a = 10^b, \\text{ and } b = m$$
+    $$MW = a \cdot t^b \\quad \\text{where } a = 10^b \\text{ and } b = m$$
     
     ### 3. Molecular Distribution Analytics Calculations
     * **Baseline Level Alignments:** Aligns timelines via 1D array linear coordinate data interpolation arrays ($np.interp$).
-    * **Concentration Vector Calibration:** $Signal_{Corrected} = \\frac{Signal_{Net}}{\\frac{Mass_{Oil}}{Mass_{Oil} + Mass_{Solvent}}}$
+    * **Concentration Vector Calibration:** $$Signal_{Corrected} = \\frac{Sample - Solvent}{\\frac{Mass_{Oil}}{Mass_{Oil} + Mass_{Solvent}}}$$
     * **Integral Averages Estimations:** Fits standard numerical Riemann summations:
         * Number Average ($M_n$): $$M_n = \\frac{\\sum W_i}{\\sum \\left(\\frac{W_i}{MW_i}\\right)}$$
         * Weight Average ($M_w$): $$M_w = \\frac{\\sum (W_i \\cdot MW_i)}{\\sum W_i}$$
