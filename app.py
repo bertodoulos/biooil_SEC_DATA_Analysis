@@ -126,9 +126,9 @@ if page == "1. Run List Setup":
 
     st.markdown("---")
     st.subheader("Option B: Automated Mass Batch Builder")
-    st.info("Fuzzy matches analytical CSV names against a Master Database to extract weights.")
+    st.info("Fuzzy matches analytical CSV names against the oil concentration spreadsheet to extract weights.")
     
-    master_db_file = st.file_uploader("1. Upload Master Excel Database", type=["xlsx"])
+    master_db_file = st.file_uploader("1. Upload Oil Concentration file", type=["xlsx"])
     sample_files = st.file_uploader("2. Upload Bio-oil Sample Data CSVs", type=["csv"], accept_multiple_files=True)
     
     if master_db_file and sample_files:
@@ -147,7 +147,7 @@ if page == "1. Run List Setup":
                     match = master_df[master_df["sample_id"].apply(lambda x: str(x).lower().replace(" ", "") in clean_name if pd.notnull(x) else False)]
                     
                     if match.empty:
-                        st.warning(f"Skipping {s_file.name}: No matching sample ID found in Master Database.")
+                        st.warning(f"Skipping {s_file.name}: No matching sample ID found in Oil Concentration file.")
                         continue
                     
                     bio_mg = match.iloc[0]["oil_mass_mg"]
