@@ -1,10 +1,10 @@
 """
 ================================================================================
-SEC Analytical Suite - Streamlit Web Edition
+SEC Analytical Suite - Streamlit Web Edition (Optimized Workflow)
 ================================================================================
 Description:
 This web application automates the processing, calibration, and reporting of SEC data.
-It provides a modern, browser-based multi-page workflow for web environments.
+It provides a streamlined, browser-based multi-page workflow for web environments.
 ================================================================================
 """
 
@@ -37,8 +37,6 @@ if "loaded_calib_name" not in st.session_state:
 if "current_std_data" not in st.session_state:
     st.session_state["current_std_data"] = []
 
-if "batch_df" not in st.session_state:
-    st.session_state["batch_df"] = None
 if "master_results" not in st.session_state:
     st.session_state["master_results"] = []
 if "master_all_curves" not in st.session_state:
@@ -62,12 +60,11 @@ st.sidebar.title("SEC Analytical Suite")
 page = st.sidebar.radio(
     "Go to Workflow Step:",
     [
-        "1. Run List Setup",
+        "1. SEC Analytics Hub",
         "2. Calibration Curve",
-        "3. MW Distribution Hub",
-        "4. MW Fractions (AUC)",
-        "5. Quick Screening Overlay",
-        "6. Theory & Mathematics"
+        "3. MW Fractions (AUC)",
+        "4. Quick Screening Overlay",
+        "5. Theory & Mathematics"
     ]
 )
 
@@ -106,72 +103,152 @@ def draw_pdf_table(df, title):
     return fig
 
 # ==========================================
-# STEP 1: RUN LIST SETUP
+# STEP 1: COMBINED SEC ANALYTICS HUB
 # ==========================================
-if page == "1. Run List Setup":
-    st.header("Step 1: SEC Run List Generation Hub")
-    
-    st.subheader("Option A: Load an Existing Run List File")
-    uploaded_run_list = st.file_uploader("Upload an existing SEC_Run_List.xlsx or .csv", type=["xlsx", "csv"])
-    if uploaded_run_list:
-        try:
-            if uploaded_run_list.name.endswith(".csv"):
-                st.session_state["batch_df"] = pd.read_csv(uploaded_run_list)
-            else:
-                st.session_state["batch_df"] = pd.read_excel(uploaded_run_list)
-            st.success(f"Successfully loaded run list: {uploaded_run_list.name}")
-            st.dataframe(st.session_state["batch_df"].head())
-        except Exception as e:
-            st.error(f"Failed to parse file: {e}")
+if page == "1. SEC Analytics Hub":
+    st.header("Step 1: SEC Analytics Control Hub")
+    st.info("Upload your inputs together once. The system handles database fuzzy-matching, solvent matching, and distribution analytics instantly.")
 
-    st.markdown("---")
-    st.subheader("Option B: Automated Mass Batch Builder")
-    st.info("Fuzzy matches analytical CSV names against the Oil Concentration File to extract weights.")
+    col1, col2 = st.columns([1, 2])
     
-    master_db_file = st.file_uploader("1. Upload Oil Concentration file", type=["xlsx"])
-    sample_files = st.file_uploader("2. Upload Bio-oil Sample Data CSVs", type=["csv"], accept_multiple_files=True)
-    
-    if master_db_file and sample_files:
-        try:
-            all_sheets = pd.read_excel(master_db_file, sheet_name=None, header=0, skiprows=[1])
-            valid_sheets = [df for name, df in all_sheets.items() if not df.empty and "sample_id" in df.columns]
-            if not valid_sheets:
-                st.error("No sheets containing a 'sample_id' column found.")
+    with col1:
+        st.subheader("Data Uploads")
+        master_db_file = st.file_uploader("1. Upload Master Database Excel", type=["xlsx"])
+        uploaded_csvs = st.file_uploader("2. Upload ALL Sample + Solvent CSVs together", type=["csv"], accept_multiple_files=True)
+        
+        st.markdown("---")
+        st.subheader("Calculation Constraints")
+        t_start = st.number_input("Integration Start Time (min)", value=12.0)
+        t_end = st.number_input("Integration End Time (min)", value=35.0)
+        
+        run_calc = st.button("▶ Process Batch & Calculate MW", type="primary")
+        
+        if run_calc:
+            if not master_db_file:
+                st.error("Missing Master Database Excel file.")
+            elif not uploaded_csvs:
+                st.error("Please upload your sample and solvent CSV tracks.")
             else:
-                master_df = pd.concat(valid_sheets, ignore_index=True).dropna(subset=["sample_id"])
-                
-                batch_data = []
-                st.write("### Processing uploaded batch files:")
-                for s_file in sample_files:
-                    clean_name = s_file.name.lower().replace(" ", "")
-                    match = master_df[master_df["sample_id"].apply(lambda x: str(x).lower().replace(" ", "") in clean_name if pd.notnull(x) else False)]
-                    
-                    if match.empty:
-                        st.warning(f"Skipping {s_file.name}: No matching sample ID found in Oil Concentration file.")
-                        continue
-                    
-                    bio_mg = match.iloc[0]["oil_mass_mg"]
-                    sol_mg = match.iloc[0]["2meth_thf_mass_mg"]
-                    
-                    batch_data.append({
-                        'sample_filename': s_file.name,
-                        'solvent_filename': f"SOLVENT_FOR_{s_file.name}",
-                        'biooil_mg': bio_mg,
-                        'solvent_mg': sol_mg
-                    })
-                
-                if batch_data:
-                    generated_df = pd.DataFrame(batch_data)
-                    st.session_state["batch_df"] = generated_df
-                    st.success(f"Run list built successfully! Compiled {len(batch_data)} tracks.")
-                    st.dataframe(generated_df)
-                    
-                    towrite = io.BytesIO()
-                    generated_df.to_excel(towrite, index=False, engine='openpyxl')
-                    towrite.seek(0)
-                    st.download_button("Download Compiled SEC_Run_List.xlsx", data=towrite, file_name="SEC_Run_List.xlsx", mime="application/vnd.ms-excel")
-        except Exception as e:
-            st.error(f"Error compiling batch: {e}")
+                try:
+                    # Parse Master Database
+                    all_sheets = pd.read_excel(master_db_file, sheet_name=None, header=0, skiprows=[1])
+                    valid_sheets = [df for name, df in all_sheets.items() if not df.empty and "sample_id" in df.columns]
+                    if not valid_sheets:
+                        st.error("No valid database metrics found containing 'sample_id'.")
+                    else:
+                        master_df = pd.concat(valid_sheets, ignore_index=True).dropna(subset=["sample_id"])
+                        
+                        file_map = {f.name: f for f in uploaded_csvs}
+                        
+                        # Identify solvent files automatically via naming conventions
+                        sol_lookup = [f for f in file_map.keys() if "solvent" in f.lower() or "blank" in f.lower() or "thf" in f.lower()]
+                        sol_file_key = sol_lookup[0] if sol_lookup else None
+                        
+                        if not sol_file_key:
+                            st.error("Could not find a solvent blank file in the uploaded pool. Ensure the filename contains 'solvent', 'blank', or 'thf'.")
+                        else:
+                            st.session_state["master_results"] = []
+                            st.session_state["master_all_curves"] = {}
+                            st.session_state["master_raw_curves"] = []
+                            
+                            mult = st.session_state["calib_multiplier"]
+                            exp = st.session_state["calib_exponent"]
+                            
+                            # Scan only files that are NOT solvents
+                            sample_keys = [k for k in file_map.keys() if k != sol_file_key]
+                            
+                            for s_key in sample_keys:
+                                clean_name = s_key.lower().replace(" ", "")
+                                match = master_df[master_df["sample_id"].apply(lambda x: str(x).lower().replace(" ", "") in clean_name if pd.notnull(x) else False)]
+                                
+                                if match.empty:
+                                    st.warning(f"Skipping file {s_key}: Not found in Master Database.")
+                                    continue
+                                    
+                                bio_mg = match.iloc[0]["oil_mass_mg"]
+                                sol_mg = match.iloc[0]["2meth_thf_mass_mg"]
+                                
+                                df_sam = parse_csv_file(file_map[s_key])
+                                df_sol = parse_csv_file(file_map[sol_file_key])
+                                
+                                if df_sam is not None and df_sol is not None:
+                                    t_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values
+                                    sig_sam = pd.to_numeric(df_sam.iloc[:,1], errors='coerce').values
+                                    t_sol = pd.to_numeric(df_sol.iloc[:,0], errors='coerce').values
+                                    sig_sol = pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
+                                    
+                                    # Core Analytics Calculations
+                                    sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
+                                    norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
+                                    
+                                    idx_start = np.argmin(np.abs(t_sam - t_start))
+                                    idx_end = np.argmin(np.abs(t_sam - t_end))
+                                    m = (norm_sig[idx_end] - norm_sig[idx_start]) / (t_sam[idx_end] - t_sam[idx_start])
+                                    corr_sig = norm_sig - (m * t_sam + norm_sig[idx_start] - m * t_sam[idx_start])
+                                    
+                                    mask = (t_sam >= t_start) & (t_sam <= t_end)
+                                    t_peak, W_i = t_sam[mask], corr_sig[mask]
+                                    W_i[W_i < 0] = 0
+                                    MW_i = mult * (t_peak ** exp)
+                                    
+                                    if np.sum(W_i) > 0:
+                                        Mn = np.sum(W_i) / np.sum(W_i / MW_i)
+                                        Mw = np.sum(W_i * MW_i) / np.sum(W_i)
+                                        PDI = Mw / Mn
+                                    else:
+                                        Mn, Mw, PDI = 0, 0, 0
+                                        
+                                    sam_short_id = s_key.split('.')[0]
+                                    st.session_state["master_results"].append({'Sample': sam_short_id, 'Mn': round(Mn), 'Mw': round(Mw), 'PDI': round(PDI, 2)})
+                                    st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
+                                    st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
+                            
+                            st.success(f"Successfully processed {len(st.session_state['master_results'])} analytical runs!")
+                except Exception as e:
+                    st.error(f"Error executing combined analysis: {e}")
+
+    with col2:
+        st.subheader("Active Display Control")
+        if not st.session_state["master_results"]:
+            st.info("Upload your data dependencies on the left and click Process to generate tables and curves.")
+        else:
+            st.write("Select records to plot or integrate into reporting arrays:")
+            selected_samples = []
+            for res in st.session_state["master_results"]:
+                if st.checkbox(res['Sample'], value=True, key=f"cb_main_{res['Sample']}"):
+                    selected_samples.append(res['Sample'])
+            
+            # Apply Filter Arrays
+            st.session_state["results_df"] = pd.DataFrame([r for r in st.session_state["master_results"] if r['Sample'] in selected_samples])
+            st.session_state["all_curves"] = {k: v for k, v in st.session_state["master_all_curves"].items() if k in selected_samples}
+            st.session_state["raw_curves"] = [c for c in st.session_state["master_raw_curves"] if c[0] in selected_samples]
+            
+            # Distribution Plotting
+            fig, ax = plt.subplots(figsize=(6, 4))
+            for name, data in st.session_state["all_curves"].items():
+                ax.plot(data['MW'], data['W'], label=name)
+            ax.axhline(0, color='black', linestyle='--', linewidth=1)
+            ax.set_xscale('log')
+            if not ax.xaxis_inverted(): ax.invert_xaxis()
+            ax.set_title("Molecular Weight Distribution Profiles", fontweight='bold')
+            ax.set_xlabel("Molecular Weight (Da)", fontweight='bold')
+            ax.set_ylabel("Normalized Abundance", fontweight='bold')
+            ax.grid(True, which="both", linestyle=':', alpha=0.5)
+            if selected_samples: ax.legend(frameon=False)
+            st.pyplot(fig)
+            
+            st.write("#### Quantified Metrics Summary")
+            st.dataframe(st.session_state["results_df"])
+            
+            if not st.session_state["results_df"].empty:
+                pdf_buffer = io.BytesIO()
+                with PdfPages(pdf_buffer) as pdf:
+                    f_run = draw_pdf_table(st.session_state["results_df"], "SEC Target Averages Summary")
+                    pdf.savefig(f_run); plt.close(f_run)
+                    fig.tight_layout()
+                    pdf.savefig(fig)
+                pdf_buffer.seek(0)
+                st.download_button("📄 Download Document PDF Report", data=pdf_buffer, file_name="SEC_Comprehensive_Report.pdf", mime="application/pdf")
 
 # ==========================================
 # STEP 2: CALIBRATION CURVE
@@ -246,7 +323,7 @@ elif page == "2. Calibration Curve":
                         st.session_state["calib_exponent"] = slope
                         st.session_state["current_std_data"] = calculated_stds
                         st.session_state["loaded_calib_name"] = "Fresh Matrix Calculation"
-                        st.success("Recalculation complete! Please refresh or click away to display changes.")
+                        st.success("Recalculation complete!")
                     else:
                         st.error("Matrix generation requires at least 2 valid standards.")
 
@@ -275,137 +352,13 @@ elif page == "2. Calibration Curve":
         st.pyplot(fig)
 
 # ==========================================
-# STEP 3: MW DISTRIBUTION
+# STEP 3: MW FRACTIONS (AUC)
 # ==========================================
-elif page == "3. MW Distribution Hub":
-    st.header("Step 3: Baseline Integration & Weight Calculations")
-    
-    if st.session_state["batch_df"] is None:
-        st.warning("Please upload or assemble an active Run List in step 1 to proceed.")
-    else:
-        col1, col2 = st.columns([1, 2])
-        
-        with col1:
-            st.subheader("Calculation Constraints")
-            t_start = st.number_input("Integration Start Time (min)", value=12.0)
-            t_end = st.number_input("Integration End Time (min)", value=35.0)
-            
-            st.write("### Feed Sample and Solvent CSV files:")
-            st.info("Upload your target analytical runs alongside your solvent blanks.")
-            
-            uploaded_csvs = st.file_uploader("Upload all Sample + Solvent Blank CSV files", type=["csv"], accept_multiple_files=True)
-            run_calc = st.button("▶ Run Distribution Calculations", type="primary")
-            
-            if run_calc and uploaded_csvs:
-                file_map = {f.name: f for f in uploaded_csvs}
-                
-                st.session_state["master_results"] = []
-                st.session_state["master_all_curves"] = {}
-                st.session_state["master_raw_curves"] = []
-                
-                mult = st.session_state["calib_multiplier"]
-                exp = st.session_state["calib_exponent"]
-                
-                for _, row in st.session_state["batch_df"].iterrows():
-                    s_name_raw = os.path.basename(str(row['sample_filename']))
-                    s_lookup = s_name_raw if s_name_raw in file_map else s_name_raw.split('.')[0] + ".csv"
-                    
-                    # Target explicit solvent file or find the first one available in the uploaded pool
-                    sol_lookup = [f for f in file_map.keys() if "solvent" in f.lower() or "blank" in f.lower() or "thf" in f.lower()]
-                    sol_file_key = sol_lookup[0] if sol_lookup else None
-                    
-                    if s_lookup in file_map and sol_file_key:
-                        df_sam = parse_csv_file(file_map[s_lookup])
-                        df_sol = parse_csv_file(file_map[sol_file_key])
-                        
-                        if df_sam is not None and df_sol is not None:
-                            t_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values
-                            sig_sam = pd.to_numeric(df_sam.iloc[:,1], errors='coerce').values
-                            t_sol = pd.to_numeric(df_sol.iloc[:,0], errors='coerce').values
-                            sig_sol = pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
-                            
-                            bio_mg = float(row['biooil_mg'])
-                            sol_mg = float(row['solvent_mg'])
-                            
-                            # Base Engine Calculations
-                            sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
-                            norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
-                            
-                            idx_start = np.argmin(np.abs(t_sam - t_start))
-                            idx_end = np.argmin(np.abs(t_sam - t_end))
-                            m = (norm_sig[idx_end] - norm_sig[idx_start]) / (t_sam[idx_end] - t_sam[idx_start])
-                            corr_sig = norm_sig - (m * t_sam + norm_sig[idx_start] - m * t_sam[idx_start])
-                            
-                            mask = (t_sam >= t_start) & (t_sam <= t_end)
-                            t_peak, W_i = t_sam[mask], corr_sig[mask]
-                            W_i[W_i < 0] = 0
-                            MW_i = mult * (t_peak ** exp)
-                            
-                            if np.sum(W_i) > 0:
-                                Mn = np.sum(W_i) / np.sum(W_i / MW_i)
-                                Mw = np.sum(W_i * MW_i) / np.sum(W_i)
-                                PDI = Mw / Mn
-                            else:
-                                Mn, Mw, PDI = 0, 0, 0
-                                
-                            sam_short_id = s_lookup.split('.')[0]
-                            st.session_state["master_results"].append({'Sample': sam_short_id, 'Mn': round(Mn), 'Mw': round(Mw), 'PDI': round(PDI, 2)})
-                            st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
-                            st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
-                
-                st.success("Batch trace processing complete!")
-
-        with col2:
-            st.subheader("Active Display Control")
-            if not st.session_state["master_results"]:
-                st.info("Awaiting execution metrics. Provide required data files and execute.")
-            else:
-                st.write("Select records to plot or integrate into reporting arrays:")
-                selected_samples = []
-                for res in st.session_state["master_results"]:
-                    if st.checkbox(res['Sample'], value=True, key=f"cb_main_{res['Sample']}"):
-                        selected_samples.append(res['Sample'])
-                
-                # Assign active filters
-                st.session_state["results_df"] = pd.DataFrame([r for r in st.session_state["master_results"] if r['Sample'] in selected_samples])
-                st.session_state["all_curves"] = {k: v for k, v in st.session_state["master_all_curves"].items() if k in selected_samples}
-                st.session_state["raw_curves"] = [c for c in st.session_state["master_raw_curves"] if c[0] in selected_samples]
-                
-                # Distribution Plotting
-                fig, ax = plt.subplots(figsize=(6, 4))
-                for name, data in st.session_state["all_curves"].items():
-                    ax.plot(data['MW'], data['W'], label=name)
-                ax.axhline(0, color='black', linestyle='--', linewidth=1)
-                ax.set_xscale('log')
-                if not ax.xaxis_inverted(): ax.invert_xaxis()
-                ax.set_title("Molecular Weight Distribution Profiles", fontweight='bold')
-                ax.set_xlabel("Molecular Weight (Da)", fontweight='bold')
-                ax.set_ylabel("Normalized Abundance", fontweight='bold')
-                ax.grid(True, which="both", linestyle=':', alpha=0.5)
-                if selected_samples: ax.legend(frameon=False)
-                st.pyplot(fig)
-                
-                st.write("#### Quantified Metrics Summary")
-                st.dataframe(st.session_state["results_df"])
-                
-                if not st.session_state["results_df"].empty:
-                    pdf_buffer = io.BytesIO()
-                    with PdfPages(pdf_buffer) as pdf:
-                        f_run = draw_pdf_table(st.session_state["results_df"], "SEC Target Averages Summary")
-                        pdf.savefig(f_run); plt.close(f_run)
-                        fig.tight_layout()
-                        pdf.savefig(fig)
-                    pdf_buffer.seek(0)
-                    st.download_button("📄 Download Document PDF Report", data=pdf_buffer, file_name="SEC_Comprehensive_Report.pdf", mime="application/pdf")
-
-# ==========================================
-# STEP 4: MW FRACTIONS
-# ==========================================
-elif page == "4. MW Fractions (AUC)":
-    st.header("Step 4: Integration of Sliced Fractions (AUC)")
+elif page == "3. MW Fractions (AUC)":
+    st.header("Step 3: Integration of Sliced Fractions (AUC)")
     
     if not st.session_state["all_curves"]:
-        st.warning("Please compute operational run profiles under Step 3 first.")
+        st.warning("Please compute operational run profiles under Step 1 first.")
     else:
         mw_ranges = [("100-15 Da", 100, 15), ("250-100 Da", 250, 100), ("850-250 Da", 850, 250), ("3500-850 Da", 3500, 850), ("16000-3500 Da", 16000, 3500)]
         
@@ -443,13 +396,13 @@ elif page == "4. MW Fractions (AUC)":
         st.pyplot(fig)
 
 # ==========================================
-# STEP 5: QUICK SCREENING OVERLAY
+# STEP 4: QUICK SCREENING OVERLAY
 # ==========================================
-elif page == "5. Quick Screening Overlay":
-    st.header("Step 5: Visual Overlay Screening Matrix")
+elif page == "4. Quick Screening Overlay":
+    st.header("Step 4: Visual Overlay Screening Matrix")
     
     if not st.session_state["master_raw_curves"]:
-        st.warning("Please execute baseline integration computations inside Step 3 to view comparative records.")
+        st.warning("Please execute analytics computations inside Step 1 to view comparative records.")
     else:
         col1, col2 = st.columns([1, 2])
         
@@ -482,21 +435,21 @@ elif page == "5. Quick Screening Overlay":
                 st.download_button("📄 Save Standalone Overlay Plot PDF", data=pdf_over_buf, file_name="SEC_Screening_Overlay.pdf", mime="application/pdf")
 
 # ==========================================
-# STEP 6: THEORY & MATHEMATICS
+# STEP 5: THEORY & MATHEMATICS
 # ==========================================
-elif page == "6. Theory & Mathematics":
-    st.header("Step 6: Mathematical Computation Logic Core")
+elif page == "5. Theory & Mathematics":
+    st.header("Step 5: Mathematical Computation Logic Core")
     
     st.markdown("""
     ### 1. Mass Correlation Indexing Architecture
-    To properly extract concentrations, the program loops sample tokens against databases, extracting `oil_mass_mg` and `2meth_thf_mass_mg` metrics to establish proper dilution equations.
+    The engine pairs uploaded file names (e.g., `PILOT_7_2.csv`) directly with rows in the Master Database, automatically extracting `oil_mass_mg` and `2meth_thf_mass_mg` metrics to establish proper dilution equations.
     
     ### 2. Standard Regression Fit Polynomial
     Peak positions are evaluated using maximum array indicators ($np.nanargmax$). Logarithmic coordinates track calibration targets through standard line fitting mechanics:
-    $$\log_{10}(MW) = m \cdot \log_{10}(t_{peak}) + b$$
+    $$\\log_{10}(MW) = m \\cdot \\log_{10}(t_{peak}) + b$$
     
     Which converts back to exponential format profiles:
-    $$MW = a \cdot t^b \\quad \\text{where } a = 10^b \\text{ and } b = m$$
+    $$MW = a \\cdot t^b \\quad \\text{where } a = 10^b \\text{ and } b = m$$
     
     ### 3. Molecular Distribution Analytics Calculations
     * **Baseline Level Alignments:** Aligns timelines via 1D array linear coordinate data interpolation arrays ($np.interp$).
