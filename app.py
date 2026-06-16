@@ -126,7 +126,7 @@ if page == "1. Run List Setup":
 
     st.markdown("---")
     st.subheader("Option B: Automated Mass Batch Builder")
-    st.info("Fuzzy matches analytical CSV names against the oil concentration spreadsheet to extract weights.")
+    st.info("Fuzzy matches analytical CSV names against the Oil Concentration File to extract weights.")
     
     master_db_file = st.file_uploader("1. Upload Oil Concentration file", type=["xlsx"])
     sample_files = st.file_uploader("2. Upload Bio-oil Sample Data CSVs", type=["csv"], accept_multiple_files=True)
