@@ -53,14 +53,14 @@ if "fractions_df" not in st.session_state:
     st.session_state["fractions_df"] = None
 
 # ==========================================
-# APP NAVIGATION (RE-ORDERED MECHANICS)
+# APP NAVIGATION
 # ==========================================
 st.sidebar.title("SEC Analytical Suite")
 page = st.sidebar.radio(
     "Go to Workflow Step:",
     [
-        "1. Calibration Curve",        # Moved to Step 1
-        "2. File upload & Analysis",   # Moved to Step 2
+        "1. Calibration Curve",
+        "2. File upload & Analysis",
         "3. MW Fractions",
         "4. Quick Screening Overlay",
         "5. Theory & Mathematics"
@@ -102,7 +102,7 @@ def draw_pdf_table(df, title):
     return fig
 
 # ==========================================
-# STEP 1: CALIBRATION CURVE (NOW PRIMARY TABS)
+# STEP 1: CALIBRATION CURVE
 # ==========================================
 if page == "1. Calibration Curve":
     st.header("Step 1: Column Calibration Engine")
@@ -222,6 +222,9 @@ elif page == "2. File upload & Analysis":
         t_start = st.number_input("Integration Start Time (min)", value=12.0)
         t_end = st.number_input("Integration End Time (min)", value=35.0)
         
+        # --- NEW CHANGE: SUBTRACTION BYPASS INTERFACE TOGGLE ---
+        use_subtraction = st.checkbox("Enable Baseline Solvent Subtraction", value=True, help="Uncheck this if your blanks have negative peaks or look distorted to skip subtraction.")
+        
         run_calc = st.button("▶ Process Batch & Calculate MW", type="primary")
         
         if run_calc:
@@ -249,7 +252,8 @@ elif page == "2. File upload & Analysis":
                             else:
                                 sample_files[f.name] = f
                         
-                        if not solvent_files:
+                        # Only crash on missing solvents if subtraction is explicitly requested by the user
+                        if use_subtraction and not solvent_files:
                             st.error("Could not isolate any solvent baseline tracks. Ensure solvent files contain 'solvent', 'blank', 'thf', or 'methf' in their names.")
                         elif not sample_files:
                             st.error("No valid sample files detected in the uploaded pool.")
@@ -279,28 +283,36 @@ elif page == "2. File upload & Analysis":
                                 bio_mg = match.iloc[0]["oil_mass_mg"]
                                 sol_mg = match.iloc[0]["2meth_thf_mass_mg"]
                                 
-                                best_sol_key = None
-                                sam_root = sam_short_id.lower().replace(" ", "")
-                                
-                                for sol_k in solvent_files.keys():
-                                    if sam_root in sol_k.lower().replace(" ", ""):
-                                        best_sol_key = sol_k
-                                        break
-                                
-                                if not best_sol_key:
-                                    best_sol_key = list(solvent_files.keys())[0]
-                                
                                 df_sam = parse_csv_file(s_file)
-                                df_sol = parse_csv_file(solvent_files[best_sol_key])
                                 
-                                if df_sam is not None and df_sol is not None:
+                                if df_sam is not None:
                                     t_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values
                                     sig_sam = pd.to_numeric(df_sam.iloc[:,1], errors='coerce').values
-                                    t_sol = pd.to_numeric(df_sol.iloc[:,0], errors='coerce').values
-                                    sig_sol = pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
                                     
-                                    sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
-                                    norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
+                                    # --- NEW CHANGE: CONDITIONAL SUBTRACTION SWITCH MECHANICS ---
+                                    if use_subtraction and solvent_files:
+                                        best_sol_key = None
+                                        sam_root = sam_short_id.lower().replace(" ", "")
+                                        for sol_k in solvent_files.keys():
+                                            if sam_root in sol_k.lower().replace(" ", ""):
+                                                best_sol_key = sol_k
+                                                break
+                                        if not best_sol_key:
+                                            best_sol_key = list(solvent_files.keys())[0]
+                                            
+                                        df_sol = parse_csv_file(solvent_files[best_sol_key])
+                                        if df_sol is not None:
+                                            t_sol = pd.to_numeric(df_sol.iloc[:,0], errors='coerce').values
+                                            sig_sol = pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
+                                            
+                                            sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
+                                            # Math with Subtraction + Weight Factor Correction
+                                            norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
+                                        else:
+                                            norm_sig = sig_sam
+                                    else:
+                                        # Bypassed Subtraction entirely, map raw sample tracks directly to normalizers
+                                        norm_sig = sig_sam / (bio_mg / (bio_mg + sol_mg))
                                     
                                     idx_start = np.argmin(np.abs(t_sam - t_start))
                                     idx_end = np.argmin(np.abs(t_sam - t_end))
@@ -323,7 +335,7 @@ elif page == "2. File upload & Analysis":
                                     st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
                                     st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
                             
-                            st.success(f"Successfully processed {len(st.session_state['master_results'])} runs using profile: {st.session_state['loaded_calib_name']}!")
+                            st.success(f"Successfully processed {len(st.session_state['master_results'])} runs!")
                 except Exception as e:
                     st.error(f"Error executing combined analysis: {e}")
 
