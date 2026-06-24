@@ -222,7 +222,6 @@ elif page == "2. File upload & Analysis":
         t_start = st.number_input("Integration Start Time (min)", value=12.0)
         t_end = st.number_input("Integration End Time (min)", value=35.0)
         
-        # --- NEW CHANGE: SUBTRACTION BYPASS INTERFACE TOGGLE ---
         use_subtraction = st.checkbox("Enable Baseline Solvent Subtraction", value=True, help="Uncheck this if your blanks have negative peaks or look distorted to skip subtraction.")
         
         run_calc = st.button("▶ Process Batch & Calculate MW", type="primary")
@@ -252,7 +251,6 @@ elif page == "2. File upload & Analysis":
                             else:
                                 sample_files[f.name] = f
                         
-                        # Only crash on missing solvents if subtraction is explicitly requested by the user
                         if use_subtraction and not solvent_files:
                             st.error("Could not isolate any solvent baseline tracks. Ensure solvent files contain 'solvent', 'blank', 'thf', or 'methf' in their names.")
                         elif not sample_files:
@@ -289,7 +287,6 @@ elif page == "2. File upload & Analysis":
                                     t_sam = pd.to_numeric(df_sam.iloc[:,0], errors='coerce').values
                                     sig_sam = pd.to_numeric(df_sam.iloc[:,1], errors='coerce').values
                                     
-                                    # --- NEW CHANGE: CONDITIONAL SUBTRACTION SWITCH MECHANICS ---
                                     if use_subtraction and solvent_files:
                                         best_sol_key = None
                                         sam_root = sam_short_id.lower().replace(" ", "")
@@ -306,12 +303,10 @@ elif page == "2. File upload & Analysis":
                                             sig_sol = pd.to_numeric(df_sol.iloc[:,1], errors='coerce').values
                                             
                                             sig_sol_aligned = np.interp(t_sam, t_sol, sig_sol)
-                                            # Math with Subtraction + Weight Factor Correction
                                             norm_sig = (sig_sam - sig_sol_aligned) / (bio_mg / (bio_mg + sol_mg))
                                         else:
                                             norm_sig = sig_sam
                                     else:
-                                        # Bypassed Subtraction entirely, map raw sample tracks directly to normalizers
                                         norm_sig = sig_sam / (bio_mg / (bio_mg + sol_mg))
                                     
                                     idx_start = np.argmin(np.abs(t_sam - t_start))
@@ -360,7 +355,8 @@ elif page == "2. File upload & Analysis":
                 ax.plot(data['MW'], data['W'], label=name)
             ax.axhline(0, color='black', linestyle='--', linewidth=1)
             ax.set_xscale('log')
-            if not ax.xaxis_inverted(): ax.invert_xaxis()
+            
+            # --- FIX 1: REMOVED AX.INVERT_XAXIS() TO SHOW INCREASING MW LEFT-TO-RIGHT ---
             ax.set_title("Molecular Weight Distribution Profiles", fontweight='bold')
             ax.set_xlabel("Molecular Weight (Da)", fontweight='bold')
             ax.set_ylabel("Normalized Abundance", fontweight='bold')
@@ -397,7 +393,14 @@ elif page == "3. MW Fractions":
     if not st.session_state["all_curves"]:
         st.warning("Please compute operational run profiles under Step 2 first.")
     else:
-        mw_ranges = [("100-15 Da", 100, 15), ("250-100 Da", 250, 100), ("850-250 Da", 850, 250), ("3500-850 Da", 3500, 850), ("16000-3500 Da", 16000, 3500)]
+        # --- FIX 2: RE-ORDERED ALL FRACTION TUPLES FROM LOW TO HIGH ---
+        mw_ranges = [
+            ("15-100 Da", 100, 15), 
+            ("100-250 Da", 250, 100), 
+            ("250-850 Da", 850, 250), 
+            ("850-3500 Da", 3500, 850), 
+            ("3500-16000 Da", 16000, 3500)
+        ]
         
         fraction_results = []
         for sam_name, data in st.session_state["all_curves"].items():
