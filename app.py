@@ -27,12 +27,13 @@ st.set_page_config(page_title="SEC Analytical Suite", layout="wide")
 # ==========================================
 # INITIALIZE SESSION STATE (App Memory)
 # ==========================================
+# TODO: Replace these placeholder values with your new calibration values once calculated
 if "calib_multiplier" not in st.session_state:
-    st.session_state["calib_multiplier"] = 3.04850e15
+    st.session_state["calib_multiplier"] = 2.14123e+15  # Enter new 'a' multiplier here
 if "calib_exponent" not in st.session_state:
-    st.session_state["calib_exponent"] = -9.63581
+    st.session_state["calib_exponent"] = -9.35714     # Enter new 'b' exponent here
 if "loaded_calib_name" not in st.session_state:
-    st.session_state["loaded_calib_name"] = "Default Constants"
+    st.session_state["loaded_calib_name"] = "2026 Core Calibration Profile"
 if "current_std_data" not in st.session_state:
     st.session_state["current_std_data"] = []
 
@@ -356,7 +357,6 @@ elif page == "2. File upload & Analysis":
             ax.axhline(0, color='black', linestyle='--', linewidth=1)
             ax.set_xscale('log')
             
-            # --- FIX 1: REMOVED AX.INVERT_XAXIS() TO SHOW INCREASING MW LEFT-TO-RIGHT ---
             ax.set_title("Molecular Weight Distribution Profiles", fontweight='bold')
             ax.set_xlabel("Molecular Weight (Da)", fontweight='bold')
             ax.set_ylabel("Normalized Abundance", fontweight='bold')
@@ -393,7 +393,6 @@ elif page == "3. MW Fractions":
     if not st.session_state["all_curves"]:
         st.warning("Please compute operational run profiles under Step 2 first.")
     else:
-        # --- FIX 2: RE-ORDERED ALL FRACTION TUPLES FROM LOW TO HIGH ---
         mw_ranges = [
             ("15-100 Da", 100, 15), 
             ("100-250 Da", 250, 100), 
