@@ -263,8 +263,16 @@ if page == "1. File upload":
             if selected_samples: ax.legend(frameon=False)
             st.pyplot(fig)
             
-            st.write("#### Quantified Metrics Summary")
-            st.dataframe(st.session_state["results_df"])
+            # --- UPDATED: RENDER CLEAN FORMATTED ON-SCREEN TABLE DIRECTLY UNDERNEATH CHART ---
+            st.write("#### 📊 Quantified Metrics Summary")
+            if not st.session_state["results_df"].empty:
+                display_df = st.session_state["results_df"].copy()
+                display_df["Mn (Da)"] = display_df["Mn"].map(lambda x: f"{int(x):,}")
+                display_df["Mw (Da)"] = display_df["Mw"].map(lambda x: f"{int(x):,}")
+                display_df["PDI"] = display_df["PDI"].map(lambda x: f"{float(x):.2f}")
+                display_df = display_df[["Sample", "Mn (Da)", "Mw (Da)", "PDI"]]
+                
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
             
             if not st.session_state["results_df"].empty:
                 pdf_buffer = io.BytesIO()
