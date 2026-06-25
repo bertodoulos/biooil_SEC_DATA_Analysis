@@ -335,7 +335,7 @@ elif page == "2. File upload & Analysis":
                 except Exception as e:
                     st.error(f"Error executing combined analysis: {e}")
 
-    with col2:
+        with col2:
         st.subheader("Active Display Control")
         if not st.session_state["master_results"]:
             st.info("Upload your data dependencies on the left and click Process to generate tables and curves.")
@@ -357,11 +357,15 @@ elif page == "2. File upload & Analysis":
             ax.axhline(0, color='black', linestyle='--', linewidth=1)
             ax.set_xscale('log')
             
-            ax.set_title("Molecular Weight Distribution Profiles", fontweight='bold')
+            # --- FIXED: REMOVED "Profiles" FROM TITLE ---
+            ax.set_title("Molecular Weight Distribution", fontweight='bold')
             ax.set_xlabel("Molecular Weight (Da)", fontweight='bold')
             ax.set_ylabel("Normalized Abundance", fontweight='bold')
             ax.grid(True, which="both", linestyle=':', alpha=0.5)
             if selected_samples: ax.legend(frameon=False)
+            
+            # --- FIXED: FORCE TIGHT LAYOUT NATIVELY FOR THE WEB INTERFACE GRAPH ---
+            fig.tight_layout()
             st.pyplot(fig)
             
             st.write("#### 📊 Quantified Metrics Summary")
@@ -373,6 +377,52 @@ elif page == "2. File upload & Analysis":
                 display_df = display_df[["Sample", "Mn (Da)", "Mw (Da)", "PDI"]]
                 
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+            if not st.session_state["results_df"].empty:
+                pdf_buffer = io.BytesIO()
+                with PdfPages(pdf_buffer) as pdf:
+                    # Page 1: Run List Overview Table
+                    disp_run_df = display_df.copy()
+                    f_run = draw_pdf_table(disp_run_df, "1. SEC Run List Data")
+                    pdf.savefig(f_run); plt.close(f_run)
+
+                    # --- FIXED: CHANGED TITLE FROM "SEC Target Averages Summary" ---
+                    f_mw_tab = draw_pdf_table(st.session_state["results_df"], "2. Molecular Weight Averages (Da)")
+                    pdf.savefig(f_mw_tab); plt.close(f_mw_tab)
+                    
+                    # --- FIXED: ADDED bbox_inches='tight' TO PREVENT AXIS CUTOFFS ---
+                    pdf.savefig(fig, bbox_inches='tight')
+                    
+                    # Page 4 & 5: Slices (Appends if Tab 3 has data)
+                    if st.session_state["fractions_df"] is not None and not st.session_state["fractions_df"].empty:
+                        f_frac_tab = draw_pdf_table(st.session_state["fractions_df"], "3a. Molecular Weight Fractions (%)")
+                        pdf.savefig(f_frac_tab); plt.close(f_frac_tab)
+                        
+                        fig_frac, ax_frac = plt.subplots(figsize=(10, 5))
+                        colors_f = ['#4472c4', '#ffc000', '#00b050', '#ed7d31', '#5b9bd5']
+                        labels_f = ["15-100 Da", "100-250 Da", "250-850 Da", "850-3500 Da", "3500-16000 Da"]
+                        x_f = np.arange(len(st.session_state["fractions_df"]))
+                        width_f = 0.15
+                        offsets_f = [-2*width_f, -width_f, 0, width_f, 2*width_f]
+                        
+                        for i, col in enumerate(labels_f):
+                            ax_frac.bar(x_f + offsets_f[i], st.session_state["fractions_df"][col], width_f, label=col, color=colors_f[i], edgecolor='white', linewidth=0.5)
+                            
+                        ax_frac.set_ylabel('Relative Abundance (%)', fontweight='bold')
+                        ax_frac.set_xticks(x_f)
+                        ax_frac.set_xticklabels(st.session_state["fractions_df"]['Sample'].tolist(), rotation=45, ha='right', fontweight='bold')
+                        ax_frac.grid(axis='y', linestyle='-', color='gray', alpha=0.3)
+                        bottom_f, top_f = ax_frac.get_ylim()
+                        ax_frac.set_ylim(bottom=0, top=top_f * 1.15)
+                        ax_frac.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), ncol=5, frameon=False)
+                        fig_frac.tight_layout()
+                        
+                        # --- FIXED: ADDED bbox_inches='tight' HERE AS WELL ---
+                        pdf.savefig(fig_frac, bbox_inches='tight')
+                        plt.close(fig_frac)
+                        
+                pdf_buffer.seek(0)
+                st.download_button("📄 Download Comprehensive Document PDF Report", data=pdf_buffer, file_name="SEC_Comprehensive_Report.pdf", mime="application/pdf")
             
             # ==========================================
             # COMPREHENSIVE PDF MULTIPAGE EXPORT HUB
