@@ -27,11 +27,10 @@ st.set_page_config(page_title="SEC Analytical Suite", layout="wide")
 # ==========================================
 # INITIALIZE SESSION STATE (App Memory)
 # ==========================================
-# TODO: Replace these placeholder values with your new calibration values once calculated
 if "calib_multiplier" not in st.session_state:
-    st.session_state["calib_multiplier"] = 2.14123e+15  # Enter new 'a' multiplier here
+    st.session_state["calib_multiplier"] = 1.00000e15
 if "calib_exponent" not in st.session_state:
-    st.session_state["calib_exponent"] = -9.35714     # Enter new 'b' exponent here
+    st.session_state["calib_exponent"] = -9.00000
 if "loaded_calib_name" not in st.session_state:
     st.session_state["loaded_calib_name"] = "2026 Core Calibration Profile"
 if "current_std_data" not in st.session_state:
@@ -335,7 +334,7 @@ elif page == "2. File upload & Analysis":
                 except Exception as e:
                     st.error(f"Error executing combined analysis: {e}")
 
-        with col2:
+    with col2:
         st.subheader("Active Display Control")
         if not st.session_state["master_results"]:
             st.info("Upload your data dependencies on the left and click Process to generate tables and curves.")
@@ -357,14 +356,11 @@ elif page == "2. File upload & Analysis":
             ax.axhline(0, color='black', linestyle='--', linewidth=1)
             ax.set_xscale('log')
             
-            # --- FIXED: REMOVED "Profiles" FROM TITLE ---
             ax.set_title("Molecular Weight Distribution", fontweight='bold')
             ax.set_xlabel("Molecular Weight (Da)", fontweight='bold')
             ax.set_ylabel("Normalized Abundance", fontweight='bold')
             ax.grid(True, which="both", linestyle=':', alpha=0.5)
             if selected_samples: ax.legend(frameon=False)
-            
-            # --- FIXED: FORCE TIGHT LAYOUT NATIVELY FOR THE WEB INTERFACE GRAPH ---
             fig.tight_layout()
             st.pyplot(fig)
             
@@ -386,14 +382,14 @@ elif page == "2. File upload & Analysis":
                     f_run = draw_pdf_table(disp_run_df, "1. SEC Run List Data")
                     pdf.savefig(f_run); plt.close(f_run)
 
-                    # --- FIXED: CHANGED TITLE FROM "SEC Target Averages Summary" ---
+                    # Page 2: Molecular Weight Averages Table
                     f_mw_tab = draw_pdf_table(st.session_state["results_df"], "2. Molecular Weight Averages (Da)")
                     pdf.savefig(f_mw_tab); plt.close(f_mw_tab)
                     
-                    # --- FIXED: ADDED bbox_inches='tight' TO PREVENT AXIS CUTOFFS ---
+                    # Page 3: Molecular Weight Distribution Plot
                     pdf.savefig(fig, bbox_inches='tight')
                     
-                    # Page 4 & 5: Slices (Appends if Tab 3 has data)
+                    # Page 4 & 5: Sliced MW Fractions
                     if st.session_state["fractions_df"] is not None and not st.session_state["fractions_df"].empty:
                         f_frac_tab = draw_pdf_table(st.session_state["fractions_df"], "3a. Molecular Weight Fractions (%)")
                         pdf.savefig(f_frac_tab); plt.close(f_frac_tab)
@@ -417,59 +413,7 @@ elif page == "2. File upload & Analysis":
                         ax_frac.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), ncol=5, frameon=False)
                         fig_frac.tight_layout()
                         
-                        # --- FIXED: ADDED bbox_inches='tight' HERE AS WELL ---
                         pdf.savefig(fig_frac, bbox_inches='tight')
-                        plt.close(fig_frac)
-                        
-                pdf_buffer.seek(0)
-                st.download_button("📄 Download Comprehensive Document PDF Report", data=pdf_buffer, file_name="SEC_Comprehensive_Report.pdf", mime="application/pdf")
-            
-            # ==========================================
-            # COMPREHENSIVE PDF MULTIPAGE EXPORT HUB
-            # ==========================================
-            if not st.session_state["results_df"].empty:
-                pdf_buffer = io.BytesIO()
-                with PdfPages(pdf_buffer) as pdf:
-                    # Page 1: Run List Overview Table
-                    # (Uses a placeholder/stripped copy matching the desktop app implementation layout)
-                    disp_run_df = display_df.copy()
-                    f_run = draw_pdf_table(disp_run_df, "1. SEC Run List Data")
-                    pdf.savefig(f_run); plt.close(f_run)
-
-                    # Page 2: Molecular Weight Averages Table
-                    f_mw_tab = draw_pdf_table(st.session_state["results_df"], "2. SEC Target Averages Summary")
-                    pdf.savefig(f_mw_tab); plt.close(f_mw_tab)
-                    
-                    # Page 3: Molecular Weight Distribution Plot
-                    pdf.savefig(fig)
-                    
-                    # Page 4 & 5: Sliced MW Fractions (Only appends if Tab 3 has data processed)
-                    if st.session_state["fractions_df"] is not None and not st.session_state["fractions_df"].empty:
-                        # Append the quantified fractions text spreadsheet grid
-                        f_frac_tab = draw_pdf_table(st.session_state["fractions_df"], "3a. Molecular Weight Fractions (%)")
-                        pdf.savefig(f_frac_tab); plt.close(f_frac_tab)
-                        
-                        # Re-generate and append the distribution bar chart layout seamlessly
-                        fig_frac, ax_frac = plt.subplots(figsize=(10, 5))
-                        colors_f = ['#4472c4', '#ffc000', '#00b050', '#ed7d31', '#5b9bd5']
-                        labels_f = ["15-100 Da", "100-250 Da", "250-850 Da", "850-3500 Da", "3500-16000 Da"]
-                        x_f = np.arange(len(st.session_state["fractions_df"]))
-                        width_f = 0.15
-                        offsets_f = [-2*width_f, -width_f, 0, width_f, 2*width_f]
-                        
-                        for i, col in enumerate(labels_f):
-                            ax_frac.bar(x_f + offsets_f[i], st.session_state["fractions_df"][col], width_f, label=col, color=colors_f[i], edgecolor='white', linewidth=0.5)
-                            
-                        ax_frac.set_ylabel('Relative Abundance (%)', fontweight='bold')
-                        ax_frac.set_xticks(x_f)
-                        ax_frac.set_xticklabels(st.session_state["fractions_df"]['Sample'].tolist(), rotation=45, ha='right', fontweight='bold')
-                        ax_frac.grid(axis='y', linestyle='-', color='gray', alpha=0.3)
-                        bottom_f, top_f = ax_frac.get_ylim()
-                        ax_frac.set_ylim(bottom=0, top=top_f * 1.15)
-                        ax_frac.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), ncol=5, frameon=False)
-                        fig_frac.tight_layout()
-                        
-                        pdf.savefig(fig_frac)
                         plt.close(fig_frac)
                         
                 pdf_buffer.seek(0)
