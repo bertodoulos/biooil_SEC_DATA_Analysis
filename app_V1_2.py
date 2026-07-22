@@ -495,7 +495,7 @@ elif page == "3. MW Fractions":
             ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.02), ncol=5, frameon=False)
             fig.tight_layout()
             st.pyplot(fig)
-
+            
 # ==========================================
 # STEP 4: QUICK SCREENING OVERLAY
 # ==========================================
@@ -506,27 +506,13 @@ elif page == "4. Quick Screening Overlay":
     
     with col1:
         st.subheader("Data Upload")
-        
-        # --- THE CLEAR MEMORY BUTTON FIX ---
-        if st.button("🗑️ Clear Overlay Memory"):
-            st.session_state["overlay_dict"] = {}
-            st.session_state["overlay_uploader_key"] += 1
-            st.rerun()
-            
-        # The key forces the widget to empty itself when the button is clicked!
-        overlay_csvs = st.file_uploader(
-            "📂 Browse CSVs to Overlay", 
-            type=["csv"], 
-            accept_multiple_files=True,
-            key=f"overlay_uploader_{st.session_state['overlay_uploader_key']}"
-        )
+        overlay_csvs = st.file_uploader("📂 Browse CSVs to Overlay", type=["csv"], accept_multiple_files=True)
         
         st.markdown("---")
         st.subheader("X-Axis Time Limits (min)")
         t_start = st.number_input("Start Time", value=10.0)
         t_end = st.number_input("End Time", value=40.0)
         
-        # APPEND files to memory instead of overwriting
         if overlay_csvs:
             for f in overlay_csvs:
                 name = f.name.split('.')[0]
