@@ -27,10 +27,13 @@ st.set_page_config(page_title="SEC Analytical Suite", layout="wide")
 # ==========================================
 # INITIALIZE SESSION STATE (App Memory)
 # ==========================================
+DEFAULT_MULTIPLIER = 2.14123e15
+DEFAULT_EXPONENT = -9.35714
+
 if "calib_multiplier" not in st.session_state:
-    st.session_state["calib_multiplier"] = 2.14123e15
+    st.session_state["calib_multiplier"] = DEFAULT_MULTIPLIER
 if "calib_exponent" not in st.session_state:
-    st.session_state["calib_exponent"] = -9.35714
+    st.session_state["calib_exponent"] = DEFAULT_EXPONENT
 if "loaded_calib_name" not in st.session_state:
     st.session_state["loaded_calib_name"] = "2026 Core Calibration Profile"
 if "current_std_data" not in st.session_state:
