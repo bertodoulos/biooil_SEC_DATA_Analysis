@@ -117,7 +117,7 @@ if page == "1. Calibration Curve":
         st.session_state["calib_multiplier"] = mult_input
         st.session_state["calib_exponent"] = exp_input
         
-        st.markdown("---")
+    st.markdown("---")
         st.subheader("Manage Saved States")
         
         calib_dict = {
@@ -133,16 +133,23 @@ if page == "1. Calibration Curve":
         )
         
         imported_json = st.file_uploader("Import Config File (JSON)", type=["json"])
-        if imported_json:
-            try:
-                data = json.load(imported_json)
-                st.session_state["calib_multiplier"] = data["multiplier"]
-                st.session_state["calib_exponent"] = data["exponent"]
-                st.session_state["current_std_data"] = data.get("standards_table", [])
-                st.session_state["loaded_calib_name"] = imported_json.name
-                st.rerun()
-            except Exception as e:
-                st.error(f"Malformed config: {e}")
+        
+        # --- FIXED: PREVENT INFINITE RERUN LOOP ---
+        if imported_json is not None:
+            # Check if this exact file upload event has already been processed
+            if "last_loaded_file_id" not in st.session_state or st.session_state["last_loaded_file_id"] != imported_json.file_id:
+                try:
+                    data = json.load(imported_json)
+                    st.session_state["calib_multiplier"] = data["multiplier"]
+                    st.session_state["calib_exponent"] = data["exponent"]
+                    st.session_state["current_std_data"] = data.get("standards_table", [])
+                    st.session_state["loaded_calib_name"] = imported_json.name
+                    
+                    # Log the file ID so Streamlit ignores it on the next loop
+                    st.session_state["last_loaded_file_id"] = imported_json.file_id
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Malformed config: {e}")
 
         st.markdown("---")
         st.subheader("Auto-Calculate from Standards")
