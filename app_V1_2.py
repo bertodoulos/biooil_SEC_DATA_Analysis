@@ -500,6 +500,7 @@ elif page == "4. Quick Screening Overlay":
     with col1:
         st.subheader("Data Upload")
         
+        # --- THE CLEAR MEMORY BUTTON ---
         if st.button("🗑️ Clear Overlay Memory"):
             st.session_state["overlay_dict"] = {}
             st.rerun()
@@ -511,6 +512,7 @@ elif page == "4. Quick Screening Overlay":
         t_start = st.number_input("Start Time", value=10.0)
         t_end = st.number_input("End Time", value=40.0)
         
+        # APPEND files to memory instead of overwriting
         if overlay_csvs:
             for f in overlay_csvs:
                 name = f.name.split('.')[0]
@@ -556,7 +558,6 @@ elif page == "4. Quick Screening Overlay":
             st.download_button("📄 Save Standalone Overlay Plot PDF", data=pdf_over_buf, file_name="SEC_Screening_Overlay.pdf", mime="application/pdf")
         else:
             st.info("Upload CSVs on the left to see independent overlays.")
-
 # ==========================================
 # STEP 5: THEORY & MATHEMATICS
 # ==========================================
