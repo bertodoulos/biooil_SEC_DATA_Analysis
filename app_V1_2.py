@@ -59,6 +59,10 @@ if "last_loaded_file_id" not in st.session_state:
 # Persistent Memory for Tab 4 (Quick Overlay)
 if "overlay_dict" not in st.session_state:
     st.session_state["overlay_dict"] = {}
+    
+# Dynamic key to force file uploader to clear
+if "overlay_uploader_key" not in st.session_state:
+    st.session_state["overlay_uploader_key"] = 0
 
 # ==========================================
 # APP NAVIGATION
@@ -500,12 +504,19 @@ elif page == "4. Quick Screening Overlay":
     with col1:
         st.subheader("Data Upload")
         
-        # --- THE CLEAR MEMORY BUTTON ---
+        # --- THE CLEAR MEMORY BUTTON FIX ---
         if st.button("🗑️ Clear Overlay Memory"):
             st.session_state["overlay_dict"] = {}
+            st.session_state["overlay_uploader_key"] += 1
             st.rerun()
             
-        overlay_csvs = st.file_uploader("📂 Browse CSVs to Overlay", type=["csv"], accept_multiple_files=True)
+        # The key forces the widget to empty itself when the button is clicked!
+        overlay_csvs = st.file_uploader(
+            "📂 Browse CSVs to Overlay", 
+            type=["csv"], 
+            accept_multiple_files=True,
+            key=f"overlay_uploader_{st.session_state['overlay_uploader_key']}"
+        )
         
         st.markdown("---")
         st.subheader("X-Axis Time Limits (min)")
@@ -558,6 +569,7 @@ elif page == "4. Quick Screening Overlay":
             st.download_button("📄 Save Standalone Overlay Plot PDF", data=pdf_over_buf, file_name="SEC_Screening_Overlay.pdf", mime="application/pdf")
         else:
             st.info("Upload CSVs on the left to see independent overlays.")
+
 # ==========================================
 # STEP 5: THEORY & MATHEMATICS
 # ==========================================
