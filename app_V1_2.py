@@ -51,6 +51,8 @@ if "raw_curves" not in st.session_state:
     st.session_state["raw_curves"] = []
 if "fractions_df" not in st.session_state:
     st.session_state["fractions_df"] = None
+if "last_loaded_file_id" not in st.session_state:
+    st.session_state["last_loaded_file_id"] = None
 
 # ==========================================
 # APP NAVIGATION
@@ -117,7 +119,7 @@ if page == "1. Calibration Curve":
         st.session_state["calib_multiplier"] = mult_input
         st.session_state["calib_exponent"] = exp_input
         
-    st.markdown("---")
+        st.markdown("---")
         st.subheader("Manage Saved States")
         
         calib_dict = {
@@ -133,11 +135,8 @@ if page == "1. Calibration Curve":
         )
         
         imported_json = st.file_uploader("Import Config File (JSON)", type=["json"])
-        
-        # --- FIXED: PREVENT INFINITE RERUN LOOP ---
         if imported_json is not None:
-            # Check if this exact file upload event has already been processed
-            if "last_loaded_file_id" not in st.session_state or st.session_state["last_loaded_file_id"] != imported_json.file_id:
+            if st.session_state["last_loaded_file_id"] != imported_json.file_id:
                 try:
                     data = json.load(imported_json)
                     st.session_state["calib_multiplier"] = data["multiplier"]
@@ -145,7 +144,6 @@ if page == "1. Calibration Curve":
                     st.session_state["current_std_data"] = data.get("standards_table", [])
                     st.session_state["loaded_calib_name"] = imported_json.name
                     
-                    # Log the file ID so Streamlit ignores it on the next loop
                     st.session_state["last_loaded_file_id"] = imported_json.file_id
                     st.rerun()
                 except Exception as e:
@@ -346,7 +344,6 @@ elif page == "2. File upload & Analysis":
         if not st.session_state["master_results"]:
             st.info("Upload your data dependencies on the left and click Process to generate tables and curves.")
         else:
-            # Replaced manual checkboxes with dynamic multi-select box for layering
             st.write("*(Note: The order you select samples determines the visual layering. First = Bottom layer)*")
             available_samples = [res['Sample'] for res in st.session_state["master_results"]]
             selected_samples = st.multiselect("Active Samples to Plot/Export:", options=available_samples, default=available_samples)
@@ -357,11 +354,9 @@ elif page == "2. File upload & Analysis":
             
             fig, ax = plt.subplots(figsize=(6, 4))
             
-            # Plot strictly in the order returned by the multiselect box
             for name in selected_samples:
                 if name in st.session_state["all_curves"]:
                     data = st.session_state["all_curves"][name]
-                    # Thinner lines with transparency
                     ax.plot(data['MW'], data['W'], label=name, linewidth=1.0, alpha=0.85)
                     
             ax.axhline(0, color='black', linestyle='--', linewidth=1)
