@@ -51,8 +51,14 @@ if "raw_curves" not in st.session_state:
     st.session_state["raw_curves"] = []
 if "fractions_df" not in st.session_state:
     st.session_state["fractions_df"] = None
+    
+# Anti-Loop Memory for JSON uploads
 if "last_loaded_file_id" not in st.session_state:
     st.session_state["last_loaded_file_id"] = None
+    
+# Persistent Memory for Tab 4 (Quick Overlay)
+if "overlay_dict" not in st.session_state:
+    st.session_state["overlay_dict"] = {}
 
 # ==========================================
 # APP NAVIGATION
@@ -135,6 +141,8 @@ if page == "1. Calibration Curve":
         )
         
         imported_json = st.file_uploader("Import Config File (JSON)", type=["json"])
+        
+        # Prevent infinite rerun loops when a file is loaded
         if imported_json is not None:
             if st.session_state["last_loaded_file_id"] != imported_json.file_id:
                 try:
@@ -491,6 +499,11 @@ elif page == "4. Quick Screening Overlay":
     
     with col1:
         st.subheader("Data Upload")
+        
+        if st.button("🗑️ Clear Overlay Memory"):
+            st.session_state["overlay_dict"] = {}
+            st.rerun()
+            
         overlay_csvs = st.file_uploader("📂 Browse CSVs to Overlay", type=["csv"], accept_multiple_files=True)
         
         st.markdown("---")
@@ -499,28 +512,32 @@ elif page == "4. Quick Screening Overlay":
         t_end = st.number_input("End Time", value=40.0)
         
         if overlay_csvs:
-            st.markdown("---")
-            st.subheader("Layer Control")
-            st.write("*(First selected = Bottom layer)*")
-            
-            overlay_dict = {}
             for f in overlay_csvs:
                 name = f.name.split('.')[0]
                 df = parse_csv_file(f)
                 if df is not None:
                     t = pd.to_numeric(df.iloc[:,0], errors='coerce').values
                     sig = pd.to_numeric(df.iloc[:,1], errors='coerce').values
-                    overlay_dict[name] = (t, sig)
+                    st.session_state["overlay_dict"][name] = (t, sig)
             
-            selected_overlays = st.multiselect("Select & Order Profiles:", options=list(overlay_dict.keys()), default=list(overlay_dict.keys()))
+        if st.session_state["overlay_dict"]:
+            st.markdown("---")
+            st.subheader("Layer Control")
+            st.write("*(First selected = Bottom layer)*")
+            
+            selected_overlays = st.multiselect(
+                "Select & Order Profiles:", 
+                options=list(st.session_state["overlay_dict"].keys()), 
+                default=list(st.session_state["overlay_dict"].keys())
+            )
                 
     with col2:
         st.subheader("Max-Normalized Relative Output Profiles")
-        if overlay_csvs and selected_overlays:
+        if st.session_state["overlay_dict"] and selected_overlays:
             fig, ax = plt.subplots(figsize=(6, 4))
             
             for name in selected_overlays:
-                t, sig = overlay_dict[name]
+                t, sig = st.session_state["overlay_dict"][name]
                 peak_max = np.max(sig)
                 if peak_max > 0:
                     ax.plot(t, sig / peak_max, label=name, linewidth=1.0, alpha=0.85)
