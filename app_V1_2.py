@@ -45,6 +45,8 @@ if "master_all_curves" not in st.session_state:
     st.session_state["master_all_curves"] = {}
 if "master_raw_curves" not in st.session_state:
     st.session_state["master_raw_curves"] = []
+if "processed_run_info" not in st.session_state:
+    st.session_state["processed_run_info"] = []
 
 if "results_df" not in st.session_state:
     st.session_state["results_df"] = None
@@ -279,6 +281,7 @@ elif page == "2. File upload & Analysis":
                             st.session_state["master_results"] = []
                             st.session_state["master_all_curves"] = {}
                             st.session_state["master_raw_curves"] = []
+                            st.session_state["processed_run_info"] = []
                             
                             mult = float(st.session_state["calib_multiplier"])
                             exp = float(st.session_state["calib_exponent"])
@@ -349,6 +352,7 @@ elif page == "2. File upload & Analysis":
                                     st.session_state["master_results"].append({'Sample': sam_short_id, 'Mn': round(Mn), 'Mw': round(Mw), 'PDI': round(PDI, 2)})
                                     st.session_state["master_all_curves"][sam_short_id] = {'MW': MW_i, 'W': W_i}
                                     st.session_state["master_raw_curves"].append((sam_short_id, t_peak, W_i))
+                                    st.session_state["processed_run_info"].append({'Sample': sam_short_id, 'Oil Mass (mg)': bio_mg, 'Solvent Mass (mg)': sol_mg})
                             
                             st.success(f"Successfully processed {len(st.session_state['master_results'])} runs!")
                 except Exception as e:
@@ -399,11 +403,12 @@ elif page == "2. File upload & Analysis":
             if not st.session_state["results_df"].empty:
                 pdf_buffer = io.BytesIO()
                 with PdfPages(pdf_buffer) as pdf:
-                    disp_run_df = display_df.copy()
-                    f_run = draw_pdf_table(disp_run_df, "1. SEC Run List Data")
+                    # Fix: Generate the proper metadata run list for Page 1 based on the active selection
+                    run_info_df = pd.DataFrame([r for r in st.session_state["processed_run_info"] if r['Sample'] in selected_samples])
+                    f_run = draw_pdf_table(run_info_df, "1. SEC Run List Data")
                     pdf.savefig(f_run, bbox_inches='tight'); plt.close(f_run)
 
-                    f_mw_tab = draw_pdf_table(st.session_state["results_df"], "2. Molecular Weight Averages (Da)")
+                    f_mw_tab = draw_pdf_table(display_df, "2. Molecular Weight Averages")
                     pdf.savefig(f_mw_tab, bbox_inches='tight'); plt.close(f_mw_tab)
                     
                     pdf.savefig(fig, bbox_inches='tight')
